@@ -3,61 +3,77 @@ import speech_recognition as sr
 from audio_recorder_streamlit import audio_recorder
 import io
 
-# 設定頁面標題
-st.set_page_config(page_title="即時語音辨識對話", page_icon="🎤")
+# 設定頁面標題與版面
+st.set_page_config(page_title="語音辨識對話系統", page_icon="🎤", layout="centered")
 
-# === 初始化 Session State ===
+# 自定義 CSS 讓 UI 更美觀（可選）
+st.markdown("""
+    <style>
+    .stChatFloatingInputContainer { background-color: rgba(0,0,0,0); }
+    </style>
+    """, unsafe_allow_html=True)
+
+# === 1. 初始化 Session State ===
 if "messages" not in st.session_state:
     st.session_state.messages = []
     
-# 【關鍵修正】新增一個狀態來記錄「最後一次處理過的音訊」
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 
-# === 1. 顯示對話視窗 (上半部) ===
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# === 2. 顯示對話歷史紀錄 (對話視窗) ===
+st.title("🗣️ 語音對話助手")
+chat_placeholder = st.container()
 
-# === 2. 錄音控制區 (下半部) ===
-st.markdown("---")
-st.write("點擊下方麥克風圖示開始說話（停頓 1 秒將自動結束錄音）：")
+with chat_placeholder:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
 
-# 錄音元件 (1秒靜音自動中斷)
-audio_bytes = audio_recorder(
-    text="", 
-    recording_color="#e8b62c", 
-    neutral_color="#6aa36f", 
-    icon_name="microphone", 
-    icon_size="2x",
-    pause_threshold=1.0 
-)
+# === 3. 錄音控制區 ===
+st.write("") # 增加間距
+st.write("") 
 
-# === 3. 語音辨識與防重複處理機制 ===
-# 條件判斷：必須有錄到音訊，且這段音訊「不等於」上次處理過的音訊
+# 使用固定底部的容器或置中顯示
+col1, col2, col3 = st.columns([1, 2, 1])
+
+with col2:
+    st.write("      點擊麥克風開始說話")
+    # 錄音元件：放大圖示並設定顏色
+    # pause_threshold=1.0：停頓 1 秒自動中止
+    audio_bytes = audio_recorder(
+        text="",
+        recording_color="#FF4B4B", # 錄音中：紅色
+        neutral_color="#28a745",   # 平常/停止：綠色
+        icon_name="microphone",
+        icon_size="4x",            # 放大圖案
+        pause_threshold=1.0
+    )
+
+# === 4. 語音辨識與對話框輸出 ===
 if audio_bytes and audio_bytes != st.session_state.last_audio:
-    
-    # 標記這段新音訊為「已處理」
     st.session_state.last_audio = audio_bytes
     
-    # 使用 st.spinner 顯示短暫的處理動畫，處理完就會自動消失，不會殘留文字
-    with st.spinner("辨識中..."):
+    with st.spinner("正在辨識語音..."):
         audio_file = io.BytesIO(audio_bytes)
         r = sr.Recognizer()
         with sr.AudioFile(audio_file) as source:
             audio_data = r.record(source)
         
         try:
-            # 呼叫 API 進行辨識
+            # 辨識繁體中文
             text = r.recognize_google(audio_data, language="zh-TW")
             
-            # 【關鍵要求】只將結果加到對話紀錄中，不在其他地方顯示
+            # 將辨識文字存入對話紀錄
             st.session_state.messages.append({"role": "user", "content": text})
             
-            # 觸發畫面重新整理，讓對話窗顯示最新訊息
+            # 重新整理頁面以顯示最新的對話框
             st.rerun()
             
         except sr.UnknownValueError:
-            st.error("聽不清楚您說的話，請再試一次。")
-        except sr.RequestError as e:
-            st.error(f"API 請求錯誤：{e}")
+            st.toast("⚠️ 抱歉，我沒聽清楚，請再試一次。", icon="🎙️")
+        except sr.RequestError:
+            st.error("連線錯誤，請檢查網路。")
+
+# 頁尾提示
+st.markdown("---")
+st.caption("💡 提示：說完話後請靜止 1 秒，系統會自動辨識並將文字傳送到對話視窗。")
