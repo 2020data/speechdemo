@@ -70,7 +70,6 @@ def transcribe_with_whisper(audio_bytes: bytes, lang: str, key: str) -> str:
     finally:
         os.unlink(tmp_path)
 
-
 def transcribe_with_google(audio_bytes: bytes, lang: str) -> str:
     """使用 Google Web Speech API（免費，需網路）"""
     import speech_recognition as sr
@@ -86,18 +85,15 @@ def transcribe_with_google(audio_bytes: bytes, lang: str) -> str:
     except sr.RequestError as e:
         return f"❌ Google API 錯誤：{e}"
 
-
 def transcribe(audio_bytes: bytes, lang: str, api_key: str) -> str:
     if api_key and api_key.startswith("sk-"):
         return transcribe_with_whisper(audio_bytes, lang, api_key)
     return transcribe_with_google(audio_bytes, lang)
 
-
 def base64_to_wav_bytes(b64_data: str) -> bytes:
     """將 base64 WebM/WAV 轉成 WAV bytes"""
     raw = base64.b64decode(b64_data)
     return raw  # streamlit-realtime-audio-recorder 已回傳 WAV
-
 
 # ── 錄音元件 ──────────────────────────────────────────────────────────────────
 st.markdown("### 🔴 點擊麥克風開始錄音")
