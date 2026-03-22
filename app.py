@@ -96,28 +96,35 @@ def base64_to_wav_bytes(b64_data: str) -> bytes:
     return raw  # streamlit-realtime-audio-recorder 已回傳 WAV
 
 # ── 錄音元件 ──────────────────────────────────────────────────────────────────
+# ── 錄音元件 ──────────────────────────────────────────────────────────────────
 st.markdown("### 🔴 點擊麥克風開始錄音")
 
-audio_data = audio_recorder(
+# 1. 移除 key="recorder" 參數
+result = audio_recorder(
     interval=50,                        # 每 50ms 檢查一次音量
     threshold=silence_threshold,        # 靜音閾值 dB
     silenceTimeout=silence_timeout,     # 停頓多少 ms 後停止
-    play=False,
-    key="recorder"
+    play=False
 )
 
 # ── 處理錄音結果 ──────────────────────────────────────────────────────────────
-if audio_data and audio_data != st.session_state.last_audio_id:
-    st.session_state.last_audio_id = audio_data  # 防止重複處理
+# 2. 解析回傳的字典，提取出實際的音訊字串 (audioData)
+if result and isinstance(result, dict) and result.get('status') == 'stopped':
+    audio_b64 = result.get('audioData')
+    
+    # 確保有音訊且沒有重複處理
+    if audio_b64 and audio_b64 != st.session_state.last_audio_id:
+        st.session_state.last_audio_id = audio_b64  # 記錄當前音檔，防止重複處理
 
-    audio_bytes = base64_to_wav_bytes(audio_data)
-    st.audio(audio_bytes, format="audio/wav")
+        audio_bytes = base64_to_wav_bytes(audio_b64)
+        st.audio(audio_bytes, format="audio/wav")
 
-    with st.spinner("🔄 辨識中..."):
-        text = transcribe(audio_bytes, language, api_key)
+        with st.spinner("🔄 辨識中..."):
+            text = transcribe(audio_bytes, language, api_key)
 
-    st.success(f"📝 辨識結果：**{text}**")
-    st.session_state.transcripts.append(text)
+        st.success(f"📝 辨識結果：**{text}**")
+        st.session_state.transcripts.append(text)
+
 
 # ── 歷史記錄 ─────────────────────────────────────────────────────────────────
 if st.session_state.transcripts:
