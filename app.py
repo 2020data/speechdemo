@@ -1,8 +1,6 @@
 import streamlit as st
 import base64
 import io
-import wave
-import numpy as np
 import openai
 import tempfile
 import os
@@ -91,15 +89,16 @@ def transcribe(audio_bytes: bytes, lang: str, api_key: str) -> str:
     return transcribe_with_google(audio_bytes, lang)
 
 def base64_to_wav_bytes(b64_data: str) -> bytes:
-    """將 base64 WebM/WAV 轉成 WAV bytes"""
-    raw = base64.b64decode(b64_data)
-    return raw  # streamlit-realtime-audio-recorder 已回傳 WAV
+    """清理 Base64 字串並轉換為 bytes"""
+    # 如果字串包含 data:audio/wav;base64, 這種前綴，必須切掉
+    if "," in b64_data:
+        b64_data = b64_data.split(",")[1]
+    return base64.b64decode(b64_data)
 
-# ── 錄音元件 ──────────────────────────────────────────────────────────────────
 # ── 錄音元件 ──────────────────────────────────────────────────────────────────
 st.markdown("### 🔴 點擊麥克風開始錄音")
 
-# 1. 移除 key="recorder" 參數
+# 移除 key="recorder" 參數，避免引發 Unexpected keyword argument
 result = audio_recorder(
     interval=50,                        # 每 50ms 檢查一次音量
     threshold=silence_threshold,        # 靜音閾值 dB
@@ -108,23 +107,30 @@ result = audio_recorder(
 )
 
 # ── 處理錄音結果 ──────────────────────────────────────────────────────────────
-# 2. 解析回傳的字典，提取出實際的音訊字串 (audioData)
-if result and isinstance(result, dict) and result.get('status') == 'stopped':
-    audio_b64 = result.get('audioData')
-    
-    # 確保有音訊且沒有重複處理
-    if audio_b64 and audio_b64 != st.session_state.last_audio_id:
-        st.session_state.last_audio_id = audio_b64  # 記錄當前音檔，防止重複處理
+# 處理不同版本的套件回傳格式（支援字典或直接回傳字串）
+audio_b64 = None
+if isinstance(result, dict) and result.get("status") == "stopped":
+    audio_b64 = result.get("audioData")
+elif isinstance(result, str):
+    audio_b64 = result
 
+if audio_b64 and audio_b64 != st.session_state.last_audio_id:
+    st.session_state.last_audio_id = audio_b64
+
+    try:
         audio_bytes = base64_to_wav_bytes(audio_b64)
+        
+        # 顯示播放器確認聲音是否正常
         st.audio(audio_bytes, format="audio/wav")
 
         with st.spinner("🔄 辨識中..."):
             text = transcribe(audio_bytes, language, api_key)
-
+            
         st.success(f"📝 辨識結果：**{text}**")
         st.session_state.transcripts.append(text)
-
+        
+    except Exception as e:
+        st.error(f"❌ 處理音訊時發生錯誤: {e}")
 
 # ── 歷史記錄 ─────────────────────────────────────────────────────────────────
 if st.session_state.transcripts:
